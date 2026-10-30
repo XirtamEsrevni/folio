@@ -2,6 +2,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Modal } from "./Dialogs";
 import { CLAUDE_CODE_URL, signInChatGPT, USAGE_URL, type AiProvider } from "./ai";
 import { updateSummary } from "./updates";
+import { clearOcrCache, ocrCacheBytes } from "./ocr/cache";
+import { OCR_MODELS } from "./ocr/constants";
+import { ocrEnabled, ocrLanguage, setOcrEnabled, setOcrLanguage } from "./ocr/settings";
 
 /** One place for every Folio preference. */
 interface Props {
@@ -59,6 +62,79 @@ function Choice<T extends string>({ value, options, onChange, label }: { value: 
         </button>
       ))}
     </div>
+  );
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function OcrSettings({ onError }: { onError: (message: string | null) => void }) {
+  const desktop = window.folioDesktop?.ocr;
+  const [enabled, setEnabled] = useState(ocrEnabled);
+  const [lang, setLang] = useState(ocrLanguage);
+  const [present, setPresent] = useState<Record<string, boolean>>({ eng: true });
+  const [busy, setBusy] = useState<string | null>(null);
+  const [cacheBytes, setCacheBytes] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void ocrCacheBytes().then((n) => { if (!cancelled) setCacheBytes(n); }).catch(() => {});
+    if (!desktop) return () => { cancelled = true; };
+    void Promise.all(Object.entries(OCR_MODELS).filter(([, model]) => !model.bundled).map(async ([code]) => {
+      const status = await desktop.modelStatus(code);
+      return [code, status.present] as const;
+    })).then((rows) => {
+      if (!cancelled) setPresent((current) => ({ ...current, ...Object.fromEntries(rows) }));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [desktop]);
+
+  return (
+    <Section title="Scanned pages">
+      <Row label="Read scanned pages" hint="On this computer. Page images are not uploaded. Ask AI sends the text only when you ask a question.">
+        <Switch label="Read scanned pages" checked={enabled} onChange={(on) => { setEnabled(on); setOcrEnabled(on); }} />
+      </Row>
+      {Object.entries(OCR_MODELS).map(([code, model]) => {
+        const ready = model.bundled || !!present[code];
+        const hint = model.bundled
+          ? "Included with Folio."
+          : ready
+            ? "Saved on this computer."
+            : desktop
+              ? `Download ${formatBytes(model.bytes)}. Folio checks the file before saving it.`
+              : "Downloads in the desktop app.";
+        return (
+          <Row key={code} label={model.name} hint={hint}>
+            {ready ? (
+              <button className="btn ghost" disabled={lang === code} onClick={() => { setLang(code); setOcrLanguage(code); }}>{lang === code ? "In use" : "Use"}</button>
+            ) : desktop ? (
+              <button className="btn ghost" disabled={busy !== null} onClick={async () => {
+                setBusy(code);
+                onError(null);
+                const result = await desktop.fetchModel(code);
+                setBusy(null);
+                if (!result.ok) { onError(result.error); return; }
+                setPresent((current) => ({ ...current, [code]: true }));
+                setLang(code);
+                setOcrLanguage(code);
+              }}>{busy === code ? "Downloading…" : `Download ${formatBytes(model.bytes)}`}</button>
+            ) : (
+              <button className="btn ghost" disabled>Desktop app</button>
+            )}
+          </Row>
+        );
+      })}
+      <Row label="OCR cache" hint={cacheBytes === null ? "Recognized text stored on this computer. Password-protected PDFs are not stored." : `${formatBytes(cacheBytes)} stored, up to 200 MB. Password-protected PDFs are not stored.`}>
+        <button className="btn ghost" disabled={!cacheBytes} onClick={async () => {
+          onError(null);
+          try { await clearOcrCache(); setCacheBytes(0); }
+          catch { onError("Couldn't clear the OCR cache. Please try again."); }
+        }}>Clear</button>
+      </Row>
+    </Section>
   );
 }
 
@@ -147,6 +223,8 @@ export function SettingsDialog({ theme, onTheme, night, onNight, onOpenChangelog
             </Row>
           </Section>
         )}
+
+        <OcrSettings onError={setError} />
 
         <Section title="Signature">
           <Row label="Remembered signature" hint={savedSignature

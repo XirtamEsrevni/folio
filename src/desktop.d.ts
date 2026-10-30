@@ -26,6 +26,11 @@ interface FolioDesktop {
   getAutoUpdateEnabled(): Promise<boolean>;
   setAutoUpdateEnabled(enabled: boolean): Promise<boolean>;
   ai: FolioAi;
+  /** Extra OCR languages. English is bundled; this only fetches catalog entries. */
+  ocr: {
+    modelStatus(lang: string): Promise<{ present: boolean; bytes: number }>;
+    fetchModel(lang: string): Promise<{ ok: true; sha256: string; bytes: Uint8Array } | { ok: false; error: string }>;
+  };
 }
 
 interface AiStatus {

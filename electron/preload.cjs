@@ -47,4 +47,13 @@ contextBridge.exposeInMainWorld("folioDesktop", {
       return () => ipcRenderer.removeListener("folio:ai-event", listener);
     },
   },
+  // Language packs only. The main process picks the URL and the file; the page cannot pass either.
+  ocr: {
+    modelStatus: (lang) => ipcRenderer.invoke("folio:ocr-model-status", lang),
+    async fetchModel(lang) {
+      const result = await ipcRenderer.invoke("folio:ocr-fetch-model", lang);
+      if (!result.ok) return result;
+      return { ok: true, sha256: result.sha256, bytes: new Uint8Array(result.bytes) };
+    },
+  },
 });

@@ -6,6 +6,7 @@ const { pathToFileURL } = require("node:url");
 const { isIP } = require("node:net");
 const { autoUpdater } = require("electron-updater");
 const ai = require("./ai.cjs");
+const ocr = require("./ocr.cjs");
 const { captureWebpage } = require("./webpage.cjs");
 const { safePdfName } = require("./filenames.cjs");
 const { csp } = require("./csp.cjs");
@@ -449,6 +450,7 @@ if (!app.requestSingleInstanceLock()) {
     });
 
     ai.register(handle, (channel, payload) => win?.webContents.send(channel, payload));
+    ocr.register(handle);
 
     handle("folio:ready", () => {
       rendererReady = true;

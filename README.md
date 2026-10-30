@@ -114,6 +114,14 @@ URL opening and webpage conversion require the desktop app. Failed downloads lea
 
 Ask AI is optional and desktop-only. See [Using Ask AI](#using-ask-ai) for setup and [Privacy](#privacy) for what is sent.
 
+### Read a scanned PDF
+
+Folio can read pages that are pictures of paper. Recognition runs on your computer, one page at a time, and does not upload the page. A page that already has real text is left as it is. A small status chip shows progress; you can cancel it. Reopening a document reuses the saved text, so it is not recognized again.
+
+English is included. In the desktop app, **Settings → Scanned pages** can download Spanish, French, or German after showing the size. Folio checks the file before using it. Turn reading off, or clear the saved text, in that same section. Password-protected PDFs are read only while they are open and are not saved.
+
+Ask AI uses the recognized text when you ask, and says which pages are still unread or failed. Search, selection, and highlights use the same text once a page is ready. Handwriting, tables, and equations are not reconstructed.
+
 ### Inspect images
 
 - Click a PDF image and choose **View larger** for a high-resolution, full-window view.
@@ -141,7 +149,7 @@ Ask AI is optional and desktop-only. See [Using Ask AI](#using-ask-ai) for setup
 
 ### Settings and updates
 
-Open **⋯ → Settings** or press `Ctrl+,` for appearance, night reading, AI accounts and defaults, remembered signatures,
+Open **⋯ → Settings** or press `Ctrl+,` for appearance, night reading, scanned-page reading, AI accounts and defaults, remembered signatures,
 and updates. **About Folio** shows the version, installed/portable edition, and installation location, with a shortcut
 to open that folder.
 
@@ -177,9 +185,8 @@ On macOS, use `⌘` wherever this table says `Ctrl`. Press `?` with a document o
 
 ### Current limits
 
-- Folio annotates PDFs; it does not edit their original text/layout, merge or reorder pages, or provide OCR.
-- Search, text selection, signature-label detection, and Ask AI depend on an existing PDF text layer. Image-only scans
-  can still be viewed, drawn on, and signed, but do not gain searchable text automatically.
+- Folio annotates PDFs; it does not edit their original text or layout, or merge or reorder pages. It does not write recognized text back into the PDF file.
+- Search, selection, and Ask AI use a page's own text when it has one. Scanned pages are read on this computer in the background. A page that fails stays marked as failed and is left out of search and Ask AI. Signature-label suggestions use the text available on the page.
 - Ask AI uses extracted text, not page images, and includes up to about 400,000 characters of document text. Long
   documents may be truncated; AI answers can be wrong, so check the cited pages.
 - URL imports need a network connection and support public HTTP(S) links, with a 300 MB PDF download limit. Webpage
@@ -206,10 +213,11 @@ Folio requires no Folio account, has no analytics or telemetry, and never upload
 network requests only to:
 
 - check GitHub for updates (installed copies; can be turned off in **Settings**),
+- download an extra OCR language you choose in **Settings** (the language file only, from a pinned address, and only after its checksum matches; your document is not part of that request),
 - open a link you give it (a webpage is loaded in a hidden, sandboxed window with its own temporary session, so no
   cookies or sign-ins are shared, and every permission is denied; its scripts run while it loads, as in any browser,
   and it's then printed to PDF), and
-- answer a question you ask in **Ask AI**. Only then, the document's text (up to about 400,000 characters), any passage
+- answer a question you ask in **Ask AI**. Only then, the document's text (up to about 400,000 characters, including text read from scans), any passage
   you selected, and the conversation go to the provider you chose: OpenAI for ChatGPT, or Anthropic through your
   installed Claude Code. Their privacy terms apply to that data.
 
@@ -223,7 +231,7 @@ is there when you reopen the document; the **+** button in the panel starts over
 Stored locally in your user profile (`%APPDATA%\Folio` on Windows, `~/Library/Application Support/Folio` on macOS,
 `~/.config/Folio` on Linux): recently opened PDFs and their thumbnails (up to 8,
 removable from the home screen with **Clear all**; password-protected PDFs are never kept), highlights, notes, and
-Ask AI conversations for each document (except password-protected ones), reading positions, preferences, and, only if you choose to remember
+Ask AI conversations for each document (except password-protected ones), recognized text from scanned pages (except password-protected ones; clear it under **Settings → Scanned pages**), any extra OCR language files you download, reading positions, preferences, and, only if you choose to remember
 it, your signature image. Apart from the ChatGPT sign-in, this data isn't encrypted, so anyone with access to your
 user account can read it.
 

@@ -25,6 +25,10 @@ import { keys } from "./platform";
 import { AiPanel, type AiContext } from "./AiPanel";
 import { ZoomMenu } from "./ZoomMenu";
 import { SearchBar, type FindResult } from "./SearchBar";
+import { IDLE_OCR, startOcrSession, type OcrSession, type OcrSnapshot } from "./ocr/session";
+import { refreshOcrPage } from "./ocr/text-provider";
+import { OcrStatus, ocrSearchNote } from "./ocr/ui";
+import { OCR_SETTINGS_EVENT } from "./ocr/settings";
 import { AboutDialog, InfoDialog, OpenUrlDialog, PasswordDialog, ShortcutsDialog, parseWebUrl } from "./Dialogs";
 import { SignatureDialog } from "./SignatureDialog";
 import { SettingsDialog } from "./SettingsDialog";
@@ -107,6 +111,9 @@ export default function App() {
   const markupRef = useRef<MarkupController | null>(null);
   const persistRef = useRef(false);
   const dirtyRef = useRef(false);
+  const ocrRef = useRef<OcrSession | null>(null);
+  const searchOpenRef = useRef(false);
+  const lastFindRef = useRef<{ query: string; caseSensitive?: boolean; entireWord?: boolean } | null>(null);
 
   const [doc, setDoc] = useState<OpenDoc | null>(null);
   const [loading, setLoading] = useState(false);
@@ -117,6 +124,50 @@ export default function App() {
   const [rotation, setRotation] = useState(0);
   const [sidebar, setSidebar] = useState(() => localStorage.getItem("folio:sidebar") !== "0" && window.innerWidth > 760);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [ocr, setOcr] = useState<OcrSnapshot>(IDLE_OCR);
+  const [ocrSession, setOcrSession] = useState<OcrSession | null>(null);
+  const beginOcrRef = useRef<(pdf: PDFDocumentProxy, docId: string, persist: boolean) => void>(() => {});
+  beginOcrRef.current = (pdf, docId, persist) => {
+    ocrRef.current?.abort();
+    const session = startOcrSession({
+      pdf,
+      docId,
+      persist,
+      priorityPage: () => pageRef.current,
+      onReady: (pageNumber) => {
+        refreshOcrPage(viewerRef.current, pageNumber, findRef.current);
+        const last = lastFindRef.current;
+        if (searchOpenRef.current && last?.query) {
+          busRef.current?.dispatch("find", {
+            source: null,
+            type: "",
+            query: last.query,
+            caseSensitive: !!last.caseSensitive,
+            entireWord: !!last.entireWord,
+            highlightAll: true,
+            findPrevious: false,
+            matchDiacritics: false,
+          });
+        }
+      },
+    });
+    ocrRef.current = session;
+    setOcrSession(session);
+    setOcr(session.snapshot());
+    session.subscribe((snap) => { if (ocrRef.current === session) setOcr(snap); });
+  };
+  useEffect(() => {
+    const onSettings = () => {
+      const current = docRef.current;
+      if (!current) return;
+      beginOcrRef.current(current.pdf, current.key, persistRef.current);
+    };
+    window.addEventListener(OCR_SETTINGS_EVENT, onSettings);
+    return () => {
+      window.removeEventListener(OCR_SETTINGS_EVENT, onSettings);
+      ocrRef.current?.abort();
+    };
+  }, []);
   const [find, setFind] = useState<FindResult>({ current: 0, total: 0, state: null });
   const [theme, setTheme] = useState(document.documentElement.dataset.theme || "light");
   const [spread, setSpread] = useState(() => localStorage.getItem("folio:spread") === "1");
@@ -173,6 +224,7 @@ export default function App() {
 
   docRef.current = doc;
   dirtyRef.current = dirty;
+  searchOpenRef.current = searchOpen;
   preferencesRef.current = { sidebar, spread };
 
   /** Opening another document drops unsaved work (a placed signature, markup on a password-protected PDF), so ask first. */
@@ -277,6 +329,10 @@ export default function App() {
   const openBytes = useCallback(
     async (name: string, data: Uint8Array, password?: string) => {
       const generation = ++openGeneration.current;
+      ocrRef.current?.abort();
+      ocrRef.current = null;
+      setOcr(IDLE_OCR);
+      setOcrSession(null);
       const viewer = viewerRef.current!;
       setLoading(true);
       setError(null);
@@ -304,6 +360,7 @@ export default function App() {
         docRef.current = next;
         // Password-protected documents aren't stored by Folio (same rule as Recent).
         persistRef.current = !password;
+        beginOcrRef.current(pdf, key, !password);
         void markupRef.current!.load(key, !password);
         setNoteBox(null);
         setPinned(null);
@@ -434,6 +491,10 @@ export default function App() {
   const closeDoc = useCallback(() => {
     if (dirty && !confirm("You have unsaved annotations. Close anyway?")) return;
     openGeneration.current++;
+    ocrRef.current?.abort();
+    ocrRef.current = null;
+    setOcr(IDLE_OCR);
+    setOcrSession(null);
     setActiveDocument(null);
     markupRef.current!.unload();
     setNoteBox(null);
@@ -954,7 +1015,8 @@ export default function App() {
     };
   }, [openFile, openUrl, signing]);
 
-  const runFind = (query: string, opts: { again?: boolean; previous?: boolean; caseSensitive?: boolean; entireWord?: boolean }) =>
+  const runFind = (query: string, opts: { again?: boolean; previous?: boolean; caseSensitive?: boolean; entireWord?: boolean }) => {
+    lastFindRef.current = { query, caseSensitive: opts.caseSensitive, entireWord: opts.entireWord };
     busRef.current!.dispatch("find", {
       source: null,
       type: opts.again ? "again" : "",
@@ -965,6 +1027,7 @@ export default function App() {
       findPrevious: !!opts.previous,
       matchDiacritics: false,
     });
+  };
 
   const closeSearch = () => {
     setSearchOpen(false);
@@ -1076,10 +1139,11 @@ export default function App() {
 
           {doc && searchOpen && (
             <>
-              <SearchBar result={find} onFind={runFind} onClose={closeSearch} />
+              <SearchBar result={find} onFind={runFind} onClose={closeSearch} note={ocrSearchNote(ocr)} />
               <SearchResults pdf={doc.pdf} controller={findRef.current!} bus={busRef.current!} onSelect={goTo} />
             </>
           )}
+          {doc && <OcrStatus snapshot={ocr} onCancel={() => ocrRef.current?.abort()} />}
 
           {doc && isEditing && PALETTE[tool] && (
             <div className="color-pill" role="radiogroup" aria-label="Color">
@@ -1211,6 +1275,8 @@ export default function App() {
             docId={doc.key}
             persist={persistRef.current}
             docName={doc.name}
+            ocr={ocr}
+            ocrSession={ocrSession}
             context={aiContext}
             onClearContext={() => setAiContext(null)}
             onGoToPage={goTo}

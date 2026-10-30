@@ -3,6 +3,9 @@ import { Icon } from "./icons";
 import type { PDFDocumentProxy } from "./pdf";
 import { getAiHistory, saveAiHistory } from "./recent";
 import { CLAUDE_CODE_URL, signInChatGPT, USAGE_URL, type AiProvider } from "./ai";
+import { buildDocumentText, instructions } from "./ocr/document-text";
+import type { OcrSession, OcrSnapshot } from "./ocr/session";
+import { ocrCoverageLine } from "./ocr/ui";
 
 export interface AiContext {
   text: string;
@@ -14,57 +17,12 @@ interface Message extends AiMessage {
   error?: { message: string; code?: string; link?: string };
 }
 
-const MAX_DOC_CHARS = 400_000;
 const CLAUDE_MODELS = [
   { id: "", name: "Default model" },
   { id: "sonnet", name: "Sonnet" },
   { id: "opus", name: "Opus" },
   { id: "haiku", name: "Haiku" },
 ];
-
-// ── Document text ───────────────────────────────────────────────────────────────────────
-const textCache = new WeakMap<PDFDocumentProxy, Promise<{ text: string; truncated: boolean }>>();
-
-function documentText(pdf: PDFDocumentProxy) {
-  let cached = textCache.get(pdf);
-  if (!cached) {
-    cached = (async () => {
-      let text = "";
-      let truncated = false;
-      for (let n = 1; n <= pdf.numPages; n++) {
-        const content = await (await pdf.getPage(n)).getTextContent();
-        const page = content.items.map((item) => ("str" in item ? item.str + (item.hasEOL ? "\n" : " ") : "")).join("")
-          .replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-        const block = `[Page ${n}]\n${page}\n\n`;
-        if (text.length + block.length > MAX_DOC_CHARS) {
-          truncated = true;
-          break;
-        }
-        text += block;
-      }
-      return { text, truncated };
-    })();
-    textCache.set(pdf, cached);
-  }
-  return cached;
-}
-
-function instructions(name: string, doc: { text: string; truncated: boolean }) {
-  const hasText = doc.text.replace(/\[Page \d+\]/g, "").trim().length > 0;
-  return [
-    `You are the reading assistant in Folio, a PDF reader. The user is reading "${name}".`,
-    hasText
-      ? `Its extracted text is below between <document> tags, with [Page N] markers.${doc.truncated ? " The document is long, so only the beginning is included; say so if a question may depend on later pages." : ""}`
-      : "This PDF has no extractable text (it may be scanned images), so you can only answer from the passages the user quotes.",
-    "Guidelines:",
-    "- Answer from the document. If it doesn't contain the answer, say so plainly; you may add general knowledge if it helps, clearly labeled as such.",
-    "- Cite page numbers like (p. 12) when you use specific information from the document.",
-    "- When the user quotes a passage, focus on that passage and use the rest of the document as context.",
-    "- Be concise. Use short paragraphs, and bullet lists where they help. Use only light Markdown: **bold**, lists, and `code`.",
-    "",
-    hasText ? `<document>\n${doc.text}</document>` : "",
-  ].join("\n");
-}
 
 // ── Light Markdown rendering (no HTML is ever injected) ──────────────────────────────────
 function inline(text: string, onPage: (n: number) => void): ReactNode[] {
@@ -120,13 +78,15 @@ interface Props {
   /** Save the conversation with the document (off for password-protected documents). */
   persist: boolean;
   docName: string;
+  ocr: OcrSnapshot;
+  ocrSession: OcrSession | null;
   context: AiContext | null;
   onClearContext: () => void;
   onGoToPage: (n: number) => void;
   onClose: () => void;
 }
 
-export function AiPanel({ pdf, docId, persist, docName, context, onClearContext, onGoToPage, onClose }: Props) {
+export function AiPanel({ pdf, docId, persist, docName, ocr, ocrSession, context, onClearContext, onGoToPage, onClose }: Props) {
   const ai = window.folioDesktop?.ai;
   const [status, setStatus] = useState<AiStatus | null>(null);
   const [provider, setProviderState] = useState<AiProvider>(() => (localStorage.getItem("folio:ai-provider") as AiProvider) || "chatgpt");
@@ -218,10 +178,19 @@ export function AiPanel({ pdf, docId, persist, docName, context, onClearContext,
   }, [messages]);
 
   const ready = provider === "chatgpt" ? chatgptConnected : !!status?.claude.installed && status.claude.loggedIn;
+  const coverage = ocrCoverageLine(ocr);
+  const noScanTextYet = ocr.enabled && ocr.scanPages > 0 && ocr.processed.length === 0;
+  const readingScan = noScanTextYet && (ocr.phase === "running" || ocr.phase === "checking");
 
   const send = useCallback(async (question: string) => {
     if (!ai || !question.trim() || busyRef.current || !ready) return;
-    const doc = await documentText(pdf);
+    const doc = ocrSession
+      ? await buildDocumentText(pdf, ocrSession)
+      : await buildDocumentText(pdf, { numPages: pdf.numPages, generation: 0, page: async (pageNumber) => {
+        const content = await (await pdf.getPage(pageNumber)).getTextContent();
+        const text = content.items.map((item) => ("str" in item ? item.str : "")).join("");
+        return { page: pageNumber, kind: text.trim() ? "embedded" as const : "blank" as const, text };
+      } });
     const userContent = context
       ? `About this passage from page ${context.page}:\n"""\n${context.text}\n"""\n\n${question.trim()}`
       : question.trim();
@@ -243,7 +212,7 @@ export function AiPanel({ pdf, docId, persist, docName, context, onClearContext,
         return next;
       });
     }
-  }, [ai, pdf, context, messages, provider, model, docName, onClearContext, ready]);
+  }, [ai, pdf, ocrSession, context, messages, provider, model, docName, onClearContext, ready]);
 
   const signIn = async () => {
     if (!ai) return;
@@ -318,11 +287,17 @@ export function AiPanel({ pdf, docId, persist, docName, context, onClearContext,
             )}
             {messages.length === 0 && (
               <div className="ai-empty">
-                <p>Ask anything about <strong>{docName.replace(/\.pdf$/i, "")}</strong>, or select text in the document and choose <em>Ask AI</em>.</p>
+                {readingScan ? (
+                  <p>Reading this scan on your computer ({ocr.processed.length} of {ocr.scanPages} pages). You can ask about a page once it is ready. Folio will say which pages are still unread.</p>
+                ) : noScanTextYet && ocr.phase === "failed" ? (
+                  <p>Folio couldn't read this scan, so there's no document text yet. Select or paste a passage if you want to ask about it.</p>
+                ) : (
+                  <p>Ask anything about <strong>{docName.replace(/\.pdf$/i, "")}</strong>, or select text in the document and choose <em>Ask AI</em>.</p>
+                )}
                 <div className="suggestions">
                   {(context ? ["Explain this in simple terms", "Why does this matter?", "Summarize this passage"]
                     : ["Summarize this document", "What are the key takeaways?", "What questions does this leave open?"]).map((q) => (
-                    <button key={q} className="suggestion" onClick={() => void send(q)}>{q}</button>
+                    <button key={q} className="suggestion" disabled={noScanTextYet} onClick={() => void send(q)}>{q}</button>
                   ))}
                 </div>
               </div>
@@ -357,6 +332,7 @@ export function AiPanel({ pdf, docId, persist, docName, context, onClearContext,
       </div>
 
       <footer className="ai-foot">
+        {coverage && <p className="ai-coverage">{coverage} An answer that depends on an unread or failed page should say so.</p>}
         {context && (
           <div className="context-chip">
             <span>p. {context.page}: “{context.text.length > 90 ? context.text.slice(0, 90) + "…" : context.text}”</span>

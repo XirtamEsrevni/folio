@@ -720,6 +720,8 @@ kbd {
   border-radius: 13px;
   gap: 4px;
   color: var(--text-3);
+  flex-wrap: wrap;
+  max-width: min(640px, calc(100% - 28px));
   animation: drop-right 0.25s var(--ease);
 }
 @keyframes drop-right {
@@ -753,6 +755,44 @@ kbd {
 .search-status.miss {
   color: var(--accent-text);
 }
+.search-ocr-note {
+  flex: 1 0 100%;
+  padding: 0 4px 4px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-2);
+}
+.ocr-status {
+  position: absolute;
+  z-index: 11;
+  top: 14px;
+  left: 18px;
+}
+.ocr-chip {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(16px) saturate(1.6);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  color: var(--text-2);
+  font-size: 12.5px;
+  box-shadow: var(--shadow-md);
+}
+.ocr-pop {
+  margin-top: 8px;
+  width: min(320px, calc(100vw - 36px));
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+.ocr-pop p { margin: 0 0 8px; }
 .chip {
   height: 26px;
   min-width: 28px;

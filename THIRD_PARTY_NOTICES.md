@@ -19,5 +19,8 @@ they cover, and Electron's and Chromium's licenses are in the app's installation
 | [Electron](https://www.electronjs.org) | MIT | GitHub Inc., OpenJS Foundation and contributors |
 | Chromium (bundled with Electron) | BSD-3-Clause and others | The Chromium Authors |
 | [electron-updater](https://github.com/electron-userland/electron-builder) and its dependencies | MIT, ISC, BlueOak-1.0.0, Python-2.0 | electron-builder contributors and others |
+| [tesseract.js](https://github.com/naptha/tesseract.js) 7.0.0 | Apache-2.0 | naptha and contributors |
+| [tesseract.js-core](https://github.com/naptha/tesseract.js-core) 7.0.0 | Apache-2.0 | naptha and Tesseract contributors |
+| English, Spanish, French, and German OCR models (`4.0.0_best_int` traineddata) | Apache-2.0 | Tesseract OCR traineddata contributors, packaged for tesseract.js |
 
 The sample document (`public/sample.pdf`) was written for Folio and is covered by Folio's MIT License.

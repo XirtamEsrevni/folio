@@ -1,0 +1,34 @@
+{
+  "eng": {
+    "name": "English",
+    "bundled": true,
+    "bytes": 2952873,
+    "sha256": "45b4cb346724ac1774f1c36f42f182b887bcdb28ebe63e6fff90ac41f3fcff91",
+    "url": "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int/eng.traineddata.gz",
+    "version": "4.0.0_best_int"
+  },
+  "spa": {
+    "name": "Spanish",
+    "bundled": false,
+    "bytes": 2100190,
+    "sha256": "40be52f97b5d4eb7460073dc1f94cd546b27150333c0bf854ed7e7132db6bceb",
+    "url": "https://cdn.jsdelivr.net/npm/@tesseract.js-data/spa@1.0.0/4.0.0_best_int/spa.traineddata.gz",
+    "version": "4.0.0_best_int"
+  },
+  "fra": {
+    "name": "French",
+    "bundled": false,
+    "bytes": 707406,
+    "sha256": "d611139672b3752c7097e671e4a1d9209dfd37f2aeb081ef6487fba3351e9255",
+    "url": "https://cdn.jsdelivr.net/npm/@tesseract.js-data/fra@1.0.0/4.0.0_best_int/fra.traineddata.gz",
+    "version": "4.0.0_best_int"
+  },
+  "deu": {
+    "name": "German",
+    "bundled": false,
+    "bytes": 1333102,
+    "sha256": "306c4280d0cbed46fbff727486bd43b92730181bae80f56941a091f363bdf28b",
+    "url": "https://cdn.jsdelivr.net/npm/@tesseract.js-data/deu@1.0.0/4.0.0_best_int/deu.traineddata.gz",
+    "version": "4.0.0_best_int"
+  }
+}

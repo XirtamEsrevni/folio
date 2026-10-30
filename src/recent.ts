@@ -15,6 +15,8 @@ const DB_NAME = "folio";
 const STORE = "recent";
 const NOTES = "notes";
 const AI = "ai";
+export const OCR_STORE = "ocr";
+const DB_VERSION = 4;
 const MAX_RECENT = 8;
 /** Bigger files aren't kept in Recent: each entry stores the whole PDF, so a few 300 MB downloads would be gigabytes of copies on disk. */
 export const MAX_RECENT_FILE_BYTES = 50 * 1024 * 1024;
@@ -23,12 +25,14 @@ let connection: Promise<IDBDatabase> | null = null;
 function open(): Promise<IDBDatabase> {
   if (connection) return connection;
   connection = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 3);
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const database = req.result;
       if (!database.objectStoreNames.contains(STORE)) database.createObjectStore(STORE, { keyPath: "id" });
       if (!database.objectStoreNames.contains(NOTES)) database.createObjectStore(NOTES, { keyPath: "id" });
       if (!database.objectStoreNames.contains(AI)) database.createObjectStore(AI, { keyPath: "id" });
+      // OCR text is local and clearable, like notes. Password-protected documents never write here.
+      if (!database.objectStoreNames.contains(OCR_STORE)) database.createObjectStore(OCR_STORE, { keyPath: "id" });
     };
     req.onsuccess = () => {
       const database = req.result;
@@ -39,6 +43,10 @@ function open(): Promise<IDBDatabase> {
     req.onerror = () => { connection = null; reject(req.error); };
   });
   return connection;
+}
+
+export function folioRequest<T>(store: string, mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+  return tx(mode, fn, store);
 }
 
 async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>, store = STORE): Promise<T> {

@@ -14,10 +14,13 @@ export function SearchBar({
   result,
   onFind,
   onClose,
+  note,
 }: {
   result: FindResult;
   onFind: (q: string, o: FindOpts) => void;
   onClose: () => void;
+  /** Shown while a scan is still being read, so an empty search is explained. */
+  note?: string;
 }) {
   const [query, setQuery] = useState("");
   const [caseSensitive, setCase] = useState(false);
@@ -73,6 +76,7 @@ export function SearchBar({
       <button className="pill-btn" onClick={onClose} title="Close (Esc)">
         <Icon name="close" size={15} />
       </button>
+      {note ? <span className="search-ocr-note">{note}</span> : null}
     </div>
   );
 }

@@ -403,6 +403,19 @@
 .suggestion:hover {
   background: var(--hover);
 }
+.suggestion:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.suggestion:disabled:hover {
+  background: transparent;
+}
+.ai-coverage {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
 .msg {
   font-size: 13.5px;
   line-height: 1.55;
